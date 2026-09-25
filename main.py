@@ -59,7 +59,51 @@ def isi_data_awal():
     conn.commit()
     conn.close()
 
+
+def login():
+    while True:
+        username = input("Username: ")
+        password = input("Password: ")
+
+        conn = koneksi()
+        cur = conn.cursor()
+        cur.execute("SELECT role FROM users WHERE username=? AND password=?",
+                    (username, password))
+        hasil = cur.fetchone()
+        conn.close()
+
+        if hasil is None:
+            print("Username atau password salah!\n")
+        else:
+            print(f"Login berhasil sebagai {hasil[0]}\n")
+            return hasil[0]
+
+def menu_utama(role):
+    while True:
+        print("\n===== SMART RETAIL =====")
+        print("1. Kelola Produk")
+        print("2. Transaksi Penjualan")
+        print("3. Cari Produk")
+        print("4. Laporan Penjualan")
+        print("5. Logout")
+        pilihan = input("Pilih menu: ")
+
+        if pilihan == "1":
+            print("(Kelola Produk belum dibuat)")
+        elif pilihan == "2":
+            print("(Transaksi belum dibuat)")
+        elif pilihan == "3":
+            print("(Cari Produk belum dibuat)")
+        elif pilihan == "4":
+            print("(Laporan belum dibuat)")
+        elif pilihan == "5":
+            print("Logout berhasil.")
+            break
+        else:
+            print("Pilihan tidak valid!")
+
 # ===== Program utama =====
 buat_tabel()
 isi_data_awal()
-print("Database siap!")
+role = login()
+menu_utama(role)
