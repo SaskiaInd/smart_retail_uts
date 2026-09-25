@@ -244,7 +244,24 @@ def transaksi_penjualan():
             print("Produk tidak ditemukan!")
             continue
 
-        jumlah = int(input(f"Jumlah Pembelian (stok tersedia: {produk[3]}): "))
+        # cek berapa jumlah barang ini yang sudah ada di keranjang
+        sudah_di_keranjang = 0
+        for item in keranjang:
+            if item["id"] == produk[0]:
+                sudah_di_keranjang += item["jumlah"]
+        sisa_stok = produk[3] - sudah_di_keranjang
+
+        while True:
+            jumlah = int(input(f"Jumlah Pembelian (stok tersedia: {sisa_stok}): "))
+            if jumlah <= 0:
+                print("Jumlah harus lebih dari 0.")
+            elif jumlah > sisa_stok:
+                print("ERROR:")
+                print("Stok tidak mencukupi.")
+                print("Silakan masukkan jumlah yang lebih kecil.")
+            else:
+                break
+
         subtotal = produk[2] * jumlah
 
         keranjang.append({
