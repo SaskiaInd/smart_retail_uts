@@ -335,6 +335,77 @@ def riwayat_transaksi():
     for baris in semua:
         print(f"{baris[0]:<5}{baris[1]:<14}{format_rupiah(baris[2]):<12}")
 
+
+def cari_produk():
+    kata = input("Cari Produk : ")
+
+    conn = koneksi()
+    cur = conn.cursor()
+
+    if kata.isdigit():
+        # kalau yang diketik angka -> cari berdasarkan ID
+        cur.execute("SELECT id, nama_produk, harga_jual, stok FROM produk WHERE id=?",
+                    (int(kata),))
+    else:
+        # kalau bukan angka -> cari berdasarkan nama (mirip pun ikut muncul)
+        cur.execute("SELECT id, nama_produk, harga_jual, stok FROM produk WHERE nama_produk LIKE ?",
+                    ("%" + kata + "%",))
+
+    hasil = cur.fetchall()
+    conn.close()
+
+    if len(hasil) == 0:
+        print("Produk tidak ditemukan.")
+    else:
+        print(f"{'ID':<5}{'Nama Barang':<20}{'Harga Jual':<12}{'Stok':<6}")
+        print("-" * 43)
+        for baris in hasil:
+            print(f"{baris[0]:<5}{baris[1]:<20}{baris[2]:<12}{baris[3]:<6}")
+
+def laporan_penjualan():
+    conn = koneksi()
+    cur = conn.cursor()
+
+    print("\n===== LAPORAN PENJUALAN =====")
+
+    # 1. Total Transaksi & Total Pendapatan
+    cur.execute("SELECT COUNT(*), SUM(total_bayar) FROM transaksi")
+    jumlah_trx, pendapatan = cur.fetchone()
+    if pendapatan is None:          # belum ada transaksi sama sekali
+        pendapatan = 0
+
+    print(f"Jumlah Transaksi : {jumlah_trx}")
+    print(f"Total Penjualan  : {format_rupiah(pendapatan)}")
+
+    # 2. Produk Terlaris
+    cur.execute("""SELECT p.nama_produk, SUM(d.jumlah) AS total_terjual
+                   FROM detail_transaksi d
+                   JOIN produk p ON d.id_produk = p.id
+                   GROUP BY d.id_produk
+                   ORDER BY total_terjual DESC
+                   LIMIT 1""")
+    terlaris = cur.fetchone()
+
+    print("\nProduk Terlaris :")
+    if terlaris is None:
+        print("Belum ada penjualan.")
+    else:
+        print(f"{terlaris[0]}")
+        print(f"Terjual {terlaris[1]} pcs")
+
+    # 3. Stok Hampir Habis (< 10)
+    cur.execute("SELECT nama_produk, stok FROM produk WHERE stok < 10")
+    stok_menipis = cur.fetchall()
+
+    print("\nProduk yang harus segera restock:")
+    if len(stok_menipis) == 0:
+        print("Tidak ada produk dengan stok menipis.")
+    else:
+        for nama, stok in stok_menipis:
+            print(f"- {nama} (sisa {stok} pcs)")
+
+    conn.close()
+
 def menu_utama(role):
     while True:
         print("\n===== SMART RETAIL =====")
@@ -353,9 +424,12 @@ def menu_utama(role):
             else:
                 print("Menu ini hanya untuk kasir.")
         elif pilihan == "3":
-            print("(Cari Produk belum dibuat)")
+            cari_produk()
         elif pilihan == "4":
-            print("(Laporan belum dibuat)")
+            if role == "admin":
+                laporan_penjualan()
+            else:
+                print("Akses ditolak. Hanya admin.")
         elif pilihan == "5":
             print("Logout berhasil.")
             break
