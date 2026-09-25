@@ -203,7 +203,8 @@ def kelola_produk():
         print("2. Edit Produk")
         print("3. Hapus Produk")
         print("4. Lihat Produk")
-        print("5. Kembali ke Menu Utama")
+        print("5. Lihat Riwayat Transaksi")
+        print("6. Kembali ke Menu Utama")
         pilihan = input("Pilih menu: ")
 
         if pilihan == "1":
@@ -215,6 +216,8 @@ def kelola_produk():
         elif pilihan == "4":
             lihat_produk()
         elif pilihan == "5":
+            riwayat_transaksi()
+        elif pilihan == "6":
             break
         else:
             print("Pilihan tidak valid!")
@@ -298,6 +301,39 @@ def transaksi_penjualan():
     print(f"TOTAL = {format_rupiah(total)}")
     print(f"Kembalian : {format_rupiah(kembalian)}")
     print("==========================")
+    # simpan transaksi ke database dan kurangi stok
+    from datetime import datetime
+    tanggal = datetime.now().strftime("%d/%m/%Y")
+
+    conn = koneksi()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO transaksi (tanggal, total_bayar) VALUES (?,?)",
+                (tanggal, total))
+    id_transaksi = cur.lastrowid
+
+    for item in keranjang:
+        cur.execute("INSERT INTO detail_transaksi (id_transaksi, id_produk, jumlah, subtotal) VALUES (?,?,?,?)",
+                    (id_transaksi, item["id"], item["jumlah"], item["subtotal"]))
+        cur.execute("UPDATE produk SET stok = stok - ? WHERE id = ?",
+                    (item["jumlah"], item["id"]))
+    conn.commit()
+    conn.close()
+
+def riwayat_transaksi():
+    conn = koneksi()
+    cur = conn.cursor()
+    cur.execute("SELECT id, tanggal, total_bayar FROM transaksi ORDER BY id")
+    semua = cur.fetchall()
+    conn.close()
+
+    if len(semua) == 0:
+        print("Belum ada transaksi.")
+        return
+
+    print(f"\n{'ID':<5}{'Tanggal':<14}{'Total':<12}")
+    print("-" * 31)
+    for baris in semua:
+        print(f"{baris[0]:<5}{baris[1]:<14}{format_rupiah(baris[2]):<12}")
 
 def menu_utama(role):
     while True:
