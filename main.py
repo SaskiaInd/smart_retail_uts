@@ -78,6 +78,147 @@ def login():
             print(f"Login berhasil sebagai {hasil[0]}\n")
             return hasil[0]
 
+
+def lihat_produk():
+    conn = koneksi()
+    cur = conn.cursor()
+    cur.execute("SELECT id, nama_produk, harga_modal, harga_jual, stok FROM produk")
+    produk_data = cur.fetchall()
+    conn.close()
+
+    if not produk_data:
+        print("Belum ada produk.\n")
+        return
+
+    print("\n===== DAFTAR PRODUK =====")
+    print(f"{'ID':<5}{'Nama Produk':<20}{'Harga Modal':<15}{'Harga Jual':<15}{'Stok':<10}")
+    print("-" * 65)
+    for produk in produk_data:
+        print(f"{produk[0]:<5}{produk[1]:<20}{produk[2]:<15}{produk[3]:<15}{produk[4]:<10}")
+    print("-" * 65)
+
+def tambah_produk():
+    print("\n===== TAMBAH PRODUK =====")
+    nama_produk = input("Nama Produk: ")
+    try:
+        harga_modal = int(input("Harga Modal: "))
+        harga_jual = int(input("Harga Jual: "))
+        stok = int(input("Stok: "))
+    except ValueError:
+        print("Harga modal, harga jual, dan stok harus berupa angka.\n")
+        return
+
+    conn = koneksi()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO produk (nama_produk, harga_modal, harga_jual, stok) VALUES (?,?,?,?)",
+                (nama_produk, harga_modal, harga_jual, stok))
+    conn.commit()
+    conn.close()
+    print(f"Produk '{nama_produk}' berhasil ditambahkan.\n")
+
+def edit_produk():
+    print("\n===== EDIT PRODUK =====")
+    lihat_produk()
+    try:
+        id_produk = int(input("Masukkan ID produk yang ingin diedit: "))
+    except ValueError:
+        print("ID produk harus berupa angka.\n")
+        return
+
+    conn = koneksi()
+    cur = conn.cursor()
+    cur.execute("SELECT nama_produk, harga_modal, harga_jual, stok FROM produk WHERE id=?", (id_produk,))
+    produk = cur.fetchone()
+
+    if produk is None:
+        print("Produk tidak ditemukan.\n")
+        conn.close()
+        return
+
+    print(f"Data Produk Saat Ini: {produk[0]}, Harga Modal: {produk[1]}, Harga Jual: {produk[2]}, Stok: {produk[3]}")
+    nama_produk_baru = input(f"Nama Produk Baru (kosongkan jika tidak ingin mengubah, saat ini: {produk[0]}): ")
+    harga_modal_baru = input(f"Harga Modal Baru (kosongkan jika tidak ingin mengubah, saat ini: {produk[1]}): ")
+    harga_jual_baru = input(f"Harga Jual Baru (kosongkan jika tidak ingin mengubah, saat ini: {produk[2]}): ")
+    stok_baru = input(f"Stok Baru (kosongkan jika tidak ingin mengubah, saat ini: {produk[3]}): ")
+
+    updates = []
+    params = []
+
+    if nama_produk_baru:
+        updates.append("nama_produk=?")
+        params.append(nama_produk_baru)
+    if harga_modal_baru:
+        try:
+            updates.append("harga_modal=?")
+            params.append(int(harga_modal_baru))
+        except ValueError:
+            print("Harga modal harus berupa angka. Perubahan ini diabaikan.\n")
+    if harga_jual_baru:
+        try:
+            updates.append("harga_jual=?")
+            params.append(int(harga_jual_baru))
+        except ValueError:
+            print("Harga jual harus berupa angka. Perubahan ini diabaikan.\n")
+    if stok_baru:
+        try:
+            updates.append("stok=?")
+            params.append(int(stok_baru))
+        except ValueError:
+            print("Stok harus berupa angka. Perubahan ini diabaikan.\n")
+
+    if updates:
+        query = f"UPDATE produk SET {', '.join(updates)} WHERE id=?"
+        params.append(id_produk)
+        cur.execute(query, tuple(params))
+        conn.commit()
+        print("Produk berhasil diperbarui.\n")
+    else:
+        print("Tidak ada perubahan dilakukan.\n")
+
+    conn.close()
+
+def hapus_produk():
+    print("\n===== HAPUS PRODUK =====")
+    lihat_produk()
+    try:
+        id_produk = int(input("Masukkan ID produk yang ingin dihapus: "))
+    except ValueError:
+        print("ID produk harus berupa angka.\n")
+        return
+
+    conn = koneksi()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM produk WHERE id=?", (id_produk,))
+    conn.commit()
+    if cur.rowcount > 0:
+        print("Produk berhasil dihapus.\n")
+    else:
+        print("Produk tidak ditemukan.\n")
+    conn.close()
+
+def kelola_produk():
+    while True:
+        print("\n===== KELOLA PRODUK =====")
+        print("1. Tambah Produk")
+        print("2. Edit Produk")
+        print("3. Hapus Produk")
+        print("4. Lihat Produk")
+        print("5. Kembali ke Menu Utama")
+        pilihan = input("Pilih menu: ")
+
+        if pilihan == "1":
+            tambah_produk()
+        elif pilihan == "2":
+            edit_produk()
+        elif pilihan == "3":
+            hapus_produk()
+        elif pilihan == "4":
+            lihat_produk()
+        elif pilihan == "5":
+            break
+        else:
+            print("Pilihan tidak valid!")
+
 def menu_utama(role):
     while True:
         print("\n===== SMART RETAIL =====")
@@ -89,7 +230,7 @@ def menu_utama(role):
         pilihan = input("Pilih menu: ")
 
         if pilihan == "1":
-            print("(Kelola Produk belum dibuat)")
+            kelola_produk()
         elif pilihan == "2":
             print("(Transaksi belum dibuat)")
         elif pilihan == "3":
