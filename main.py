@@ -219,6 +219,69 @@ def kelola_produk():
         else:
             print("Pilihan tidak valid!")
 
+
+def format_rupiah(angka):
+    return "Rp" + f"{angka:,}".replace(",", ".")
+
+def transaksi_penjualan():
+    keranjang = []
+
+    while True:
+        lihat_produk()
+        id_produk = input("\nID Barang (kosongkan untuk selesai): ")
+        if id_produk == "":
+            break
+        id_produk = int(id_produk)
+
+        conn = koneksi()
+        cur = conn.cursor()
+        cur.execute("SELECT id, nama_produk, harga_jual, stok FROM produk WHERE id=?",
+                    (id_produk,))
+        produk = cur.fetchone()
+        conn.close()
+
+        if produk is None:
+            print("Produk tidak ditemukan!")
+            continue
+
+        jumlah = int(input(f"Jumlah Pembelian (stok tersedia: {produk[3]}): "))
+        subtotal = produk[2] * jumlah
+
+        keranjang.append({
+            "id": produk[0],
+            "nama": produk[1],
+            "harga": produk[2],
+            "jumlah": jumlah,
+            "subtotal": subtotal
+        })
+        print(f"{produk[1]} x{jumlah} ditambahkan ke keranjang.")
+
+        lagi = input("Tambah barang lain? (Y/T): ").upper()
+        if lagi != "Y":
+            break
+
+    if len(keranjang) == 0:
+        print("Tidak ada barang di keranjang. Transaksi dibatalkan.")
+        return
+
+    total = 0
+    for item in keranjang:
+        total += item["subtotal"]
+
+    print(f"\nTotal Belanja : {format_rupiah(total)}")
+    bayar = int(input("Uang Bayar    : "))
+    kembalian = bayar - total
+
+    print("\n==========================")
+    print("SMART RETAIL")
+    print("==========================")
+    for item in keranjang:
+        print(f"{item['nama']:<16}{item['jumlah']} x {item['harga']}")
+    print("--------------------------")
+    print(f"TOTAL = {format_rupiah(total)}")
+    print(f"Kembalian : {format_rupiah(kembalian)}")
+    print("==========================")
+
 def menu_utama(role):
     while True:
         print("\n===== SMART RETAIL =====")
@@ -232,7 +295,10 @@ def menu_utama(role):
         if pilihan == "1":
             kelola_produk()
         elif pilihan == "2":
-            print("(Transaksi belum dibuat)")
+            if role == "kasir":
+                transaksi_penjualan()
+            else:
+                print("Menu ini hanya untuk kasir.")
         elif pilihan == "3":
             print("(Cari Produk belum dibuat)")
         elif pilihan == "4":
