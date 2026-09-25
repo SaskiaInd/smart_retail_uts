@@ -1,9 +1,13 @@
 import sqlite3
+import os
+from datetime import datetime
 
 DB_NAME = "smart_retail.db"
 
+
 def koneksi():
     return sqlite3.connect(DB_NAME)
+
 
 def buat_tabel():
     conn = koneksi()
@@ -36,6 +40,7 @@ def buat_tabel():
 
     conn.commit()
     conn.close()
+
 
 def isi_data_awal():
     conn = koneksi()
@@ -79,6 +84,12 @@ def login():
             return hasil[0]
 
 
+def format_rupiah(angka):
+    return "Rp" + f"{angka:,}".replace(",", ".")
+
+
+# ===================== PRODUK =====================
+
 def lihat_produk():
     conn = koneksi()
     cur = conn.cursor()
@@ -96,6 +107,27 @@ def lihat_produk():
     for produk in produk_data:
         print(f"{produk[0]:<5}{produk[1]:<20}{produk[2]:<15}{produk[3]:<15}{produk[4]:<10}")
     print("-" * 65)
+
+
+def lihat_produk_kasir():
+    """Tampilan daftar produk untuk kasir, tanpa menampilkan harga modal."""
+    conn = koneksi()
+    cur = conn.cursor()
+    cur.execute("SELECT id, nama_produk, harga_jual, stok FROM produk")
+    produk_data = cur.fetchall()
+    conn.close()
+
+    if not produk_data:
+        print("Belum ada produk.\n")
+        return
+
+    print("\n===== DAFTAR PRODUK =====")
+    print(f"{'ID':<5}{'Nama Produk':<20}{'Harga Jual':<15}{'Stok':<10}")
+    print("-" * 50)
+    for produk in produk_data:
+        print(f"{produk[0]:<5}{produk[1]:<20}{produk[2]:<15}{produk[3]:<10}")
+    print("-" * 50)
+
 
 def tambah_produk():
     print("\n===== TAMBAH PRODUK =====")
@@ -115,6 +147,7 @@ def tambah_produk():
     conn.commit()
     conn.close()
     print(f"Produk '{nama_produk}' berhasil ditambahkan.\n")
+
 
 def edit_produk():
     print("\n===== EDIT PRODUK =====")
@@ -177,6 +210,7 @@ def edit_produk():
 
     conn.close()
 
+
 def hapus_produk():
     print("\n===== HAPUS PRODUK =====")
     lihat_produk()
@@ -196,15 +230,16 @@ def hapus_produk():
         print("Produk tidak ditemukan.\n")
     conn.close()
 
+
 def kelola_produk():
+    """Menu ini HANYA dipanggil dari menu_admin(). Kasir tidak pernah punya akses ke sini."""
     while True:
-        print("\n===== KELOLA PRODUK =====")
+        print("\n===== KELOLA PRODUK (ADMIN) =====")
         print("1. Tambah Produk")
         print("2. Edit Produk")
         print("3. Hapus Produk")
         print("4. Lihat Produk")
-        print("5. Lihat Riwayat Transaksi")
-        print("6. Kembali ke Menu Utama")
+        print("5. Kembali ke Menu Utama")
         pilihan = input("Pilih menu: ")
 
         if pilihan == "1":
@@ -216,24 +251,138 @@ def kelola_produk():
         elif pilihan == "4":
             lihat_produk()
         elif pilihan == "5":
-            riwayat_transaksi()
-        elif pilihan == "6":
             break
         else:
             print("Pilihan tidak valid!")
 
 
-def format_rupiah(angka):
-    return "Rp" + f"{angka:,}".replace(",", ".")
+def cari_produk():
+    kata = input("Cari Produk : ")
+
+    conn = koneksi()
+    cur = conn.cursor()
+
+    if kata.isdigit():
+        cur.execute("SELECT id, nama_produk, harga_jual, stok FROM produk WHERE id=?",
+                    (int(kata),))
+    else:
+        cur.execute("SELECT id, nama_produk, harga_jual, stok FROM produk WHERE nama_produk LIKE ?",
+                    ("%" + kata + "%",))
+
+    hasil = cur.fetchall()
+    conn.close()
+
+    if len(hasil) == 0:
+        print("Produk tidak ditemukan.")
+    else:
+        print(f"{'ID':<5}{'Nama Barang':<20}{'Harga Jual':<12}{'Stok':<6}")
+        print("-" * 43)
+        for baris in hasil:
+            print(f"{baris[0]:<5}{baris[1]:<20}{baris[2]:<12}{baris[3]:<6}")
+
+
+# ===================== CETAK STRUK =====================
+
+def cetak_struk_txt(nama_file, id_transaksi, tanggal, keranjang, total, bayar, kembalian):
+    with open(nama_file, "w", encoding="utf-8") as f:
+        f.write("==========================\n")
+        f.write("        SMART RETAIL\n")
+        f.write("==========================\n")
+        f.write(f"No. Transaksi : {id_transaksi}\n")
+        f.write(f"Tanggal       : {tanggal}\n")
+        f.write("--------------------------\n")
+        for item in keranjang:
+            f.write(f"{item['nama']:<16}{item['jumlah']} x {format_rupiah(item['harga'])}\n")
+            f.write(f"{'':<16}Subtotal: {format_rupiah(item['subtotal'])}\n")
+        f.write("--------------------------\n")
+        f.write(f"TOTAL      : {format_rupiah(total)}\n")
+        f.write(f"BAYAR      : {format_rupiah(bayar)}\n")
+        f.write(f"KEMBALIAN  : {format_rupiah(kembalian)}\n")
+        f.write("==========================\n")
+        f.write("     Terima kasih telah\n")
+        f.write("        berbelanja!\n")
+        f.write("==========================\n")
+    print(f"Struk berhasil disimpan sebagai '{nama_file}'\n")
+
+
+def cetak_struk_pdf(nama_file, id_transaksi, tanggal, keranjang, total, bayar, kembalian):
+    try:
+        from reportlab.lib.pagesizes import A6
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        print("Library 'reportlab' belum terpasang.")
+        print("Silakan install terlebih dahulu dengan perintah:")
+        print("    pip install reportlab")
+        print("Struk tidak jadi dicetak dalam format PDF.\n")
+        return
+
+    lebar, tinggi = A6
+    c = canvas.Canvas(nama_file, pagesize=A6)
+    y = tinggi - 30
+
+    def tulis(teks, ukuran=10, tebal=False, tengah=False):
+        nonlocal y
+        font = "Helvetica-Bold" if tebal else "Helvetica"
+        c.setFont(font, ukuran)
+        if tengah:
+            c.drawCentredString(lebar / 2, y, teks)
+        else:
+            c.drawString(20, y, teks)
+        y -= ukuran + 4
+
+    tulis("SMART RETAIL", 14, tebal=True, tengah=True)
+    tulis(f"No. Transaksi : {id_transaksi}")
+    tulis(f"Tanggal       : {tanggal}")
+    tulis("-" * 34)
+
+    for item in keranjang:
+        tulis(f"{item['nama']} x{item['jumlah']}")
+        tulis(f"   @ {format_rupiah(item['harga'])} = {format_rupiah(item['subtotal'])}")
+
+    tulis("-" * 34)
+    tulis(f"TOTAL     : {format_rupiah(total)}", tebal=True)
+    tulis(f"BAYAR     : {format_rupiah(bayar)}")
+    tulis(f"KEMBALIAN : {format_rupiah(kembalian)}")
+    tulis("-" * 34)
+    tulis("Terima kasih telah berbelanja!", tengah=True)
+
+    c.save()
+    print(f"Struk berhasil disimpan sebagai '{nama_file}'\n")
+
+
+def tawarkan_cetak_struk(id_transaksi, tanggal, keranjang, total, bayar, kembalian):
+    print("\nCetak struk?")
+    print("1. Simpan sebagai TXT")
+    print("2. Simpan sebagai PDF")
+    print("3. Tidak usah")
+    pilihan = input("Pilih: ")
+
+    folder_struk = "struk"
+    os.makedirs(folder_struk, exist_ok=True)
+
+    if pilihan == "1":
+        nama_file = os.path.join(folder_struk, f"struk_{id_transaksi}.txt")
+        cetak_struk_txt(nama_file, id_transaksi, tanggal, keranjang, total, bayar, kembalian)
+    elif pilihan == "2":
+        nama_file = os.path.join(folder_struk, f"struk_{id_transaksi}.pdf")
+        cetak_struk_pdf(nama_file, id_transaksi, tanggal, keranjang, total, bayar, kembalian)
+    else:
+        print("Struk tidak dicetak.\n")
+
+
+# ===================== TRANSAKSI =====================
 
 def transaksi_penjualan():
     keranjang = []
 
     while True:
-        lihat_produk()
+        lihat_produk_kasir()
         id_produk = input("\nID Barang (kosongkan untuk selesai): ")
         if id_produk == "":
             break
+        if not id_produk.isdigit():
+            print("ID produk harus berupa angka.\n")
+            continue
         id_produk = int(id_produk)
 
         conn = koneksi()
@@ -247,7 +396,6 @@ def transaksi_penjualan():
             print("Produk tidak ditemukan!")
             continue
 
-        # cek berapa jumlah barang ini yang sudah ada di keranjang
         sudah_di_keranjang = 0
         for item in keranjang:
             if item["id"] == produk[0]:
@@ -255,7 +403,11 @@ def transaksi_penjualan():
         sisa_stok = produk[3] - sudah_di_keranjang
 
         while True:
-            jumlah = int(input(f"Jumlah Pembelian (stok tersedia: {sisa_stok}): "))
+            try:
+                jumlah = int(input(f"Jumlah Pembelian (stok tersedia: {sisa_stok}): "))
+            except ValueError:
+                print("Jumlah harus berupa angka.")
+                continue
             if jumlah <= 0:
                 print("Jumlah harus lebih dari 0.")
             elif jumlah > sisa_stok:
@@ -284,12 +436,18 @@ def transaksi_penjualan():
         print("Tidak ada barang di keranjang. Transaksi dibatalkan.")
         return
 
-    total = 0
-    for item in keranjang:
-        total += item["subtotal"]
+    total = sum(item["subtotal"] for item in keranjang)
 
     print(f"\nTotal Belanja : {format_rupiah(total)}")
-    bayar = int(input("Uang Bayar    : "))
+    while True:
+        try:
+            bayar = int(input("Uang Bayar    : "))
+            if bayar < total:
+                print("Uang bayar kurang dari total belanja.")
+                continue
+            break
+        except ValueError:
+            print("Uang bayar harus berupa angka.")
     kembalian = bayar - total
 
     print("\n==========================")
@@ -301,9 +459,8 @@ def transaksi_penjualan():
     print(f"TOTAL = {format_rupiah(total)}")
     print(f"Kembalian : {format_rupiah(kembalian)}")
     print("==========================")
-    # simpan transaksi ke database dan kurangi stok
-    from datetime import datetime
-    tanggal = datetime.now().strftime("%d/%m/%Y")
+
+    tanggal = datetime.now().strftime("%d/%m/%Y %H:%M")
 
     conn = koneksi()
     cur = conn.cursor()
@@ -319,7 +476,11 @@ def transaksi_penjualan():
     conn.commit()
     conn.close()
 
+    tawarkan_cetak_struk(id_transaksi, tanggal, keranjang, total, bayar, kembalian)
+
+
 def riwayat_transaksi():
+    """Menu ini HANYA dipanggil dari menu_admin(). Kasir tidak pernah punya akses ke sini."""
     conn = koneksi()
     cur = conn.cursor()
     cur.execute("SELECT id, tanggal, total_bayar FROM transaksi ORDER BY id")
@@ -330,54 +491,27 @@ def riwayat_transaksi():
         print("Belum ada transaksi.")
         return
 
-    print(f"\n{'ID':<5}{'Tanggal':<14}{'Total':<12}")
-    print("-" * 31)
+    print(f"\n{'ID':<5}{'Tanggal':<18}{'Total':<12}")
+    print("-" * 35)
     for baris in semua:
-        print(f"{baris[0]:<5}{baris[1]:<14}{format_rupiah(baris[2]):<12}")
+        print(f"{baris[0]:<5}{baris[1]:<18}{format_rupiah(baris[2]):<12}")
 
-
-def cari_produk():
-    kata = input("Cari Produk : ")
-
-    conn = koneksi()
-    cur = conn.cursor()
-
-    if kata.isdigit():
-        # kalau yang diketik angka -> cari berdasarkan ID
-        cur.execute("SELECT id, nama_produk, harga_jual, stok FROM produk WHERE id=?",
-                    (int(kata),))
-    else:
-        # kalau bukan angka -> cari berdasarkan nama (mirip pun ikut muncul)
-        cur.execute("SELECT id, nama_produk, harga_jual, stok FROM produk WHERE nama_produk LIKE ?",
-                    ("%" + kata + "%",))
-
-    hasil = cur.fetchall()
-    conn.close()
-
-    if len(hasil) == 0:
-        print("Produk tidak ditemukan.")
-    else:
-        print(f"{'ID':<5}{'Nama Barang':<20}{'Harga Jual':<12}{'Stok':<6}")
-        print("-" * 43)
-        for baris in hasil:
-            print(f"{baris[0]:<5}{baris[1]:<20}{baris[2]:<12}{baris[3]:<6}")
 
 def laporan_penjualan():
+    """Menu ini HANYA dipanggil dari menu_admin(). Kasir tidak pernah punya akses ke sini."""
     conn = koneksi()
     cur = conn.cursor()
 
     print("\n===== LAPORAN PENJUALAN =====")
 
-    # 1. Total Transaksi & Total Pendapatan
     cur.execute("SELECT COUNT(*), SUM(total_bayar) FROM transaksi")
     jumlah_trx, pendapatan = cur.fetchone()
-    if pendapatan is None:          # belum ada transaksi sama sekali
+    if pendapatan is None:
         pendapatan = 0
 
     print(f"Jumlah Transaksi : {jumlah_trx}")
     print(f"Total Penjualan  : {format_rupiah(pendapatan)}")
 
-    # 2. Produk Terlaris
     cur.execute("""SELECT p.nama_produk, SUM(d.jumlah) AS total_terjual
                    FROM detail_transaksi d
                    JOIN produk p ON d.id_produk = p.id
@@ -393,7 +527,6 @@ def laporan_penjualan():
         print(f"{terlaris[0]}")
         print(f"Terjual {terlaris[1]} pcs")
 
-    # 3. Stok Hampir Habis (< 10)
     cur.execute("SELECT nama_produk, stok FROM produk WHERE stok < 10")
     stok_menipis = cur.fetchall()
 
@@ -406,12 +539,16 @@ def laporan_penjualan():
 
     conn.close()
 
-def menu_utama(role):
+
+# ===================== MENU PER ROLE =====================
+
+def menu_admin():
+    """Admin: kelola produk (tambah/edit/hapus/lihat), lihat riwayat transaksi, lihat laporan penjualan."""
     while True:
-        print("\n===== SMART RETAIL =====")
+        print("\n===== MENU ADMIN =====")
         print("1. Kelola Produk")
-        print("2. Transaksi Penjualan")
-        print("3. Cari Produk")
+        print("2. Cari Produk")
+        print("3. Riwayat Transaksi")
         print("4. Laporan Penjualan")
         print("5. Logout")
         pilihan = input("Pilih menu: ")
@@ -419,25 +556,51 @@ def menu_utama(role):
         if pilihan == "1":
             kelola_produk()
         elif pilihan == "2":
-            if role == "kasir":
-                transaksi_penjualan()
-            else:
-                print("Menu ini hanya untuk kasir.")
-        elif pilihan == "3":
             cari_produk()
+        elif pilihan == "3":
+            riwayat_transaksi()
         elif pilihan == "4":
-            if role == "admin":
-                laporan_penjualan()
-            else:
-                print("Akses ditolak. Hanya admin.")
+            laporan_penjualan()
         elif pilihan == "5":
             print("Logout berhasil.")
             break
         else:
             print("Pilihan tidak valid!")
 
+
+def menu_kasir():
+    """Kasir: HANYA transaksi penjualan dan melihat daftar produk.
+    Tidak ada opsi Tambah/Edit/Hapus Produk maupun Riwayat Transaksi di menu ini."""
+    while True:
+        print("\n===== MENU KASIR =====")
+        print("1. Transaksi Penjualan")
+        print("2. Lihat Daftar Produk")
+        print("3. Logout")
+        pilihan = input("Pilih menu: ")
+
+        if pilihan == "1":
+            transaksi_penjualan()
+        elif pilihan == "2":
+            lihat_produk_kasir()
+        elif pilihan == "3":
+            print("Logout berhasil.")
+            break
+        else:
+            print("Pilihan tidak valid!")
+
+
+def menu_utama(role):
+    if role == "admin":
+        menu_admin()
+    elif role == "kasir":
+        menu_kasir()
+    else:
+        print("Role tidak dikenali. Program dihentikan.")
+
+
 # ===== Program utama =====
-buat_tabel()
-isi_data_awal()
-role = login()
-menu_utama(role)
+if __name__ == "__main__":
+    buat_tabel()
+    isi_data_awal()
+    role = login()
+    menu_utama(role)
